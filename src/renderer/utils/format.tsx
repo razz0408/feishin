@@ -4,21 +4,30 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 import formatDuration from 'format-duration';
+import i18next from 'i18next';
 
 import { Rating } from '/@/shared/components/rating/rating';
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
 
-const FORMATS: Record<number, string> = Object.freeze({
+const FORMATS_EN: Record<number, string> = Object.freeze({
     0: 'YYYY',
     1: 'MMM YYYY',
     2: 'MMM D, YYYY',
 });
 
+const FORMATS_JA: Record<number, string> = Object.freeze({
+    0: 'YYYY年',
+    1: 'YYYY年M月',
+    2: 'YYYY年M月D日',
+});
+
 const getDateFormat = (key: string): string => {
     const dashes = Math.min(key.split('-').length - 1, 2);
-    return FORMATS[dashes];
+    const isJapanese = i18next.language?.startsWith('ja');
+    
+    return isJapanese ? FORMATS_JA[dashes] : FORMATS_EN[dashes];
 };
 
 export const formatDateAbsolute = (key: null | string) =>
@@ -34,22 +43,40 @@ export const formatDateRelative = (key: null | string) => (key ? dayjs(key).from
 
 export const formatDurationString = (duration: number) => {
     const rawDuration = formatDuration(duration).split(':');
+    const isJapanese = i18next.language?.startsWith('ja');
 
     let string;
 
-    switch (rawDuration.length) {
-        case 1:
-            string = `${rawDuration[0]} sec`;
-            break;
-        case 2:
-            string = `${rawDuration[0]} min ${rawDuration[1]} sec`;
-            break;
-        case 3:
-            string = `${rawDuration[0]} hr ${rawDuration[1]} min ${rawDuration[2]} sec`;
-            break;
-        case 4:
-            string = `${rawDuration[0]} day ${rawDuration[1]} hr ${rawDuration[2]} min ${rawDuration[3]} sec`;
-            break;
+    if (isJapanese) {
+        switch (rawDuration.length) {
+            case 1:
+                string = `${rawDuration[0]}秒`;
+                break;
+            case 2:
+                string = `${rawDuration[0]}分 ${rawDuration[1]}秒`;
+                break;
+            case 3:
+                string = `${rawDuration[0]}時間 ${rawDuration[1]}分 ${rawDuration[2]}秒`;
+                break;
+            case 4:
+                string = `${rawDuration[0]}日 ${rawDuration[1]}時間 ${rawDuration[2]}分 ${rawDuration[3]}秒`;
+                break;
+        }
+    } else {
+        switch (rawDuration.length) {
+            case 1:
+                string = `${rawDuration[0]} sec`;
+                break;
+            case 2:
+                string = `${rawDuration[0]} min ${rawDuration[1]} sec`;
+                break;
+            case 3:
+                string = `${rawDuration[0]} hr ${rawDuration[1]} min ${rawDuration[2]} sec`;
+                break;
+            case 4:
+                string = `${rawDuration[0]} day ${rawDuration[1]} hr ${rawDuration[2]} min ${rawDuration[3]} sec`;
+                break;
+        }
     }
 
     return string;
