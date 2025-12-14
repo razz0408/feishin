@@ -78,7 +78,7 @@ jobs:
       # 7. ビルド実行
       - name: Build App
         if: steps.check.outputs.should_build == 'true'
-        run: pnpm run build
+        run: pnpm run publish:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -103,15 +103,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 10. Discord通知
+# 10. Discord通知 (文字化け対策版)
       - name: Notify Discord
         if: steps.check.outputs.should_build == 'true' && success()
-        shell: bash
+        shell: powershell  # ← ここを PowerShell に変更
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          MESSAGE="✅ **Feishin (Custom Build) 完了**\n本家の更新を取り込み、新しいバージョンをビルドしました。\n\n🔽 **ダウンロード:**\nhttps://github.com/${{ github.repository }}/releases/tag/weekly-build-${{ github.run_number }}"
-          
-          curl -H "Content-Type: application/json" \
-               -d "{\"content\": \"$MESSAGE\"}" \
-               "$DISCORD_WEBHOOK"
+          $message = "✅ **Feishin (Custom Build) 完了**`n本家の更新を取り込み、新しいバージョンをビルドしました。`n`n🔽 **ダウンロード:**`nhttps://github.com/$($env:GITHUB_REPOSITORY)/releases/tag/weekly-build-$($env:GITHUB_RUN_NUMBER)"
+
+          $payload = @{
+              content = $message
+          } | ConvertTo-Json -Compress
+
+          Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK -Method Post -ContentType "application/json" -Body ([System.Text.Encoding]::UTF8.GetBytes($payload))
