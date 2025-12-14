@@ -60,10 +60,11 @@ jobs:
           git fetch upstream
           git fetch origin
 
+          git checkout -B feature/jp-tweaks origin/feature/jp-tweaks
           git rebase upstream/development
           git push origin feature/jp-tweaks --force
           
-          git checkout development 2>/dev/null || git checkout -b development
+          git checkout -B development
 
           git reset --hard feature/jp-tweaks
           git push origin development --force
