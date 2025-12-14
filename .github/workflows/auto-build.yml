@@ -48,6 +48,7 @@ jobs:
       # 3. 本家同期 (更新がある場合のみ実行)
       - name: Sync with Upstream
         if: steps.check.outputs.should_build == 'true'
+        shell: bash
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
