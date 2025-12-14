@@ -52,9 +52,9 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git fetch upstream
-          git checkout feature/jp-tweaks
+          git checkout development
           git rebase upstream/development
-          git push origin feature/jp-tweaks --force
+          git push origin development --force
 
       # 4. Node.js セットアップ
       - name: Setup Node.js
