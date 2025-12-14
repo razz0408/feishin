@@ -1,0 +1,114 @@
+name: Auto Sync and Build (Weekly/Win)
+
+permissions:
+  contents: write
+
+on:
+  # 毎週月曜日の朝9時 (JST)
+  schedule:
+    - cron: '0 0 * * 1'
+  # 手動実行ボタン
+  workflow_dispatch:
+
+jobs:
+  sync-and-build:
+    runs-on: windows-latest
+
+    steps:
+      # 1. チェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. 更新チェック (New!)
+      # 本家 (Upstream) が進んでいるか確認し、進んでいなければスキップフラグを立てる
+      - name: Check for updates
+        id: check
+        shell: bash
+        run: |
+          git remote add upstream https://github.com/jeffvli/feishin.git
+          git fetch upstream
+
+          # 「本家の最新(upstream/main)」が「今の自分のコード(HEAD)」の過去に含まれているか判定
+          # 含まれていれば「更新なし」、含まれていなければ「新しいコミットあり」
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "✅ No updates from upstream. Skipping build."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 New updates detected. Proceeding with build."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      # 3. 本家同期 (更新がある場合のみ実行)
+      - name: Sync with Upstream
+        if: steps.check.outputs.should_build == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          # upstreamはさっき追加したのでfetchだけでOKだが念のため
+          git fetch upstream
+          git checkout main
+          git rebase upstream/main
+          git push origin main --force
+
+      # 4. Node.js セットアップ
+      - name: Setup Node.js
+        if: steps.check.outputs.should_build == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 5. pnpm セットアップ
+      - name: Setup pnpm
+        if: steps.check.outputs.should_build == 'true'
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      # 6. 依存関係インストール
+      - name: Install Dependencies
+        if: steps.check.outputs.should_build == 'true'
+        run: pnpm install
+
+      # 7. ビルド実行
+      - name: Build App
+        if: steps.check.outputs.should_build == 'true'
+        run: pnpm run build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8. ファイルパス取得
+      - name: Get Artifact Path
+        if: steps.check.outputs.should_build == 'true'
+        id: get_artifact
+        shell: bash
+        run: |
+          echo "path=$(find dist -name '*.exe' | head -n 1)" >> $GITHUB_OUTPUT
+
+      # 9. リリースアップロード
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        if: steps.check.outputs.should_build == 'true' && steps.get_artifact.outputs.path != ''
+        with:
+          tag_name: "weekly-build-${{ github.run_number }}"
+          name: "Weekly Build #${{ github.run_number }}"
+          files: ${{ steps.get_artifact.outputs.path }}
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 10. Discord通知
+      - name: Notify Discord
+        if: steps.check.outputs.should_build == 'true' && success()
+        shell: bash
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          MESSAGE="✅ **Feishin (Custom Build) 完了**\n本家の更新を取り込み、新しいバージョンをビルドしました。\n\n🔽 **ダウンロード:**\nhttps://github.com/${{ github.repository }}/releases/tag/weekly-build-${{ github.run_number }}"
+          
+          curl -H "Content-Type: application/json" \
+               -d "{\"content\": \"$MESSAGE\"}" \
+               "$DISCORD_WEBHOOK"
