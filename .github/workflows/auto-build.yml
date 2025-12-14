@@ -37,7 +37,7 @@ jobs:
           git remote add upstream https://github.com/jeffvli/feishin.git
           git fetch upstream
 
-          if git merge-base --is-ancestor upstream/main HEAD; then
+          if git merge-base --is-ancestor upstream/development HEAD; then
             echo "✅ No updates from upstream. Skipping build."
             echo "should_build=false" >> $GITHUB_OUTPUT
           else
@@ -51,9 +51,20 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          if ! git remote | grep -q upstream; then
+            git remote add upstream https://github.com/jeffvli/feishin.git
+          fi
+
           git fetch upstream
-          git checkout development
+          git fetch origin
+
           git rebase upstream/development
+          git push origin feature/jp-tweaks --force
+          
+          git checkout development 2>/dev/null || git checkout -b development
+
+          git reset --hard feature/jp-tweaks
           git push origin development --force
 
       # 4. Node.js セットアップ
@@ -78,7 +89,7 @@ jobs:
       # 7. ビルド実行
       - name: Build App
         if: steps.check.outputs.should_build == 'true'
-        run: pnpm run publish:win
+        run: pnpm run package:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -103,17 +114,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-# 10. Discord通知 (文字化け対策版)
+      # 10. Discord通知
       - name: Notify Discord
         if: steps.check.outputs.should_build == 'true' && success()
-        shell: powershell  # ← ここを PowerShell に変更
+        shell: pwsh
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_MESSAGE: |
+            ✅ **Feishin (Custom Build) 完了**
+            本家の更新を取り込み、新しいバージョンをビルドしました。
+            
+            🔽 **ダウンロード:**
+            https://github.com/${{ github.repository }}/releases/tag/weekly-build-${{ github.run_number }}
         run: |
-          $message = "✅ **Feishin (Custom Build) 完了**`n本家の更新を取り込み、新しいバージョンをビルドしました。`n`n🔽 **ダウンロード:**`nhttps://github.com/$($env:GITHUB_REPOSITORY)/releases/tag/weekly-build-$($env:GITHUB_RUN_NUMBER)"
-
           $payload = @{
-              content = $message
+              content = $env:DISCORD_MESSAGE
           } | ConvertTo-Json -Compress
 
-          Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK -Method Post -ContentType "application/json" -Body ([System.Text.Encoding]::UTF8.GetBytes($payload))
+          Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($payload))
